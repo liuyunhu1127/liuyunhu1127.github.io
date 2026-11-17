@@ -1,0 +1,16 @@
+{
+  "name": "zixu-personal-site",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "刘云虎 liuyefengfly 的个人网站",
+  "scripts": {
+    "build": "node build.mjs",
+    "start": "node server.mjs",
+    "dev": "node build.mjs && node server.mjs",
+    "test": "node --test tests/site.test.mjs"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}

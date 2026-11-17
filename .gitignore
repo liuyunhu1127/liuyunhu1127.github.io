@@ -1,0 +1,6 @@
+dist/
+node_modules/
+preview*.jpg
+*.zip
+*.tar.gz
+.DS_Store
