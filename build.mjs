@@ -15,6 +15,23 @@ for (const collection of [site.projects, site.articles]) for (const [slug, item]
   if (!/^[a-z0-9-]+$/.test(slug) || !item.title || !Array.isArray(item.sections)) throw new Error('内容条目格式无效');
   if (item.isExample !== undefined && typeof item.isExample !== 'boolean') throw new Error('isExample 必须是 true 或 false');
 }
+// Aliases are old slugs within the same collection. Every old URL points
+// directly to a current page; never resolve alias chains or external URLs.
+const redirects=[];
+for (const [kind,collection] of [['work',site.projects],['journal',site.articles]]) {
+  const claimed=new Set();
+  for (const [slug,item] of Object.entries(collection)) {
+    const aliases=item.aliases === undefined ? [] : item.aliases;
+    if (!Array.isArray(aliases)) throw new Error(`${kind}/${slug}: aliases 必须是旧 slug 数组`);
+    for (const alias of aliases) {
+      if (typeof alias!=='string' || !/^[a-z0-9-]+$/.test(alias)) throw new Error(`${kind}/${slug}: aliases 中的旧 slug 格式无效`);
+      if (Object.hasOwn(collection,alias)) throw new Error(`${kind}/${alias}: aliases 与当前 slug 冲突`);
+      if (claimed.has(alias)) throw new Error(`${kind}/${alias}: aliases 旧 slug 重复`);
+      claimed.add(alias);
+      redirects.push({from:`/${kind}/${alias}/`,to:`/${kind}/${slug}/`,title:item.title});
+    }
+  }
+}
 // Only remove the generated dist directory immediately beneath this checkout.
 if (path.dirname(path.resolve(out)) !== root || path.basename(out) !== 'dist') throw new Error('输出目录不安全');
 await rm(out, { recursive: true, force: true });
@@ -95,9 +112,16 @@ const contactLinks = site.social.map(x=>`<a class="social-link" href="${esc(x.ur
 await emit('contact/index.html',page('联系我',`联系${site.author}，交流想法与项目。`,'/contact/','',`<section class="wrap section contact-page"><p class="eyebrow muted">LET’S MAKE SOMETHING / SAY HELLO</p><h1>好的故事，<br>从一次<span>交流</span>开始。</h1><p class="page-intro">你好，我是${esc(site.author)}。关于软件开发、设计想法，或只是打个招呼，都欢迎来信。</p><div class="contact-grid"><div><p class="eyebrow muted">EMAIL / 联系邮箱</p>${site.email?`<a class="email-address" href="mailto:${esc(site.email)}">${esc(site.email)} ↗</a><div class="contact-options"><button class="text-link" data-copy="${esc(site.email)}">复制邮箱</button><a href="/contact.vcf" download>保存联系名片 ↓</a></div>`:'<p>暂未开放邮箱联系。</p>'}${site.wechat?`<p>微信：${esc(site.wechat)}</p><button class="text-link" data-copy="${esc(site.wechat)}">复制微信号</button>`:''}<div class="social-links">${contactLinks}</div><p class="contact-hint">邮件会由你设备上的邮件应用发送。本站不收集或保存你的留言。</p></div><form id="contact-form" data-email="${esc(site.email)}"><label>如何称呼你<input name="name" autocomplete="name" maxlength="80" required placeholder="你的名字"></label><label>联系邮箱<input name="email" type="email" autocomplete="email" maxlength="254" required placeholder="you@example.com"></label><label>想聊些什么<textarea name="message" rows="4" minlength="5" maxlength="3000" required placeholder="说说你的想法或项目…"></textarea></label><button class="button primary" type="submit"${site.email?'':' disabled'}>在邮件应用中撰写 <span>↗</span></button><p class="form-note" id="form-status" role="status">填写后打开邮件应用，确认内容后自行发送。</p></form></div></section>`));
 await emit('privacy/index.html',page('隐私说明','本网站的数据使用与本地存储说明。','/privacy/','',`<section class="wrap section legal"><p class="eyebrow muted">PRIVACY / 简单透明</p><h1>你的浏览，属于你。</h1><div class="prose"><h2>浏览与本地存储</h2><p>网站不使用广告追踪、第三方分析脚本或访客账户。主题偏好和手记收藏保存在当前浏览器的本地存储中，不会提交给网站作者。不同浏览器和设备之间不会自动同步。</p><h2>联系与外部链接</h2><p>联系表单只在本机整理邮件内容，交由你的邮件应用发送，本站没有留言数据库。点击外部社交链接后，适用对应平台的隐私政策。托管服务商可能为提供服务记录必要的请求日志，具体以其政策为准。</p><h2>清除本机记录</h2><p>你可以随时清除本网站保存的主题偏好和文章收藏。此操作只影响当前浏览器。</p><button class="button primary" id="clear-local-data">清除本站本机记录</button><h2>有问题？</h2><p>${site.email?`请联系 <a href="mailto:${esc(site.email)}">${esc(site.email)}</a>。`:'请通过联系页了解可用的联系方式。'}</p></div></section>`));
 await emit('404.html',page('页面未找到','这个地址暂时没有内容。','/404.html','',`<section class="wrap section not-found"><p class="eyebrow muted">404 / A LITTLE DETOUR</p><h1>偶尔迷路，<br>也有新的发现。</h1><p class="page-intro">这个页面可能已移动，或地址有些小差错。</p><a class="button primary" href="/">回到首页 ↗</a><a class="inline-link" href="/journal/">随便读一篇 ↗</a></section>`));
+for (const redirect of redirects) {
+  const body=`<section class="wrap section not-found"><p class="eyebrow muted">PAGE MOVED / 新的地址</p><h1>这篇内容有了新地址。</h1><p class="page-intro">正在前往「${esc(redirect.title)}」。若没有自动跳转，请点击下面的链接。</p><a class="button primary" href="${redirect.to}">前往新页面 ↗</a></section>`;
+  // Pass the destination to page() so canonical and Open Graph use the new URL.
+  const html=page('页面已迁移','内容已迁移至新的地址。',redirect.to,'',body)
+    .replace('</head>',()=>`<meta name="robots" content="noindex,follow"><noscript><meta http-equiv="refresh" content="0;url=${redirect.to}"></noscript><script id="redirect-script">location.replace(${json(redirect.to)}+location.search+location.hash);</script></head>`);
+  await emit(redirect.from.slice(1)+'index.html',html);
+}
 await emit('contact.vcf',`BEGIN:VCARD\r\nVERSION:3.0\r\nFN:${site.author}\r\nN:;${site.author};;;\r\nNICKNAME:${site.nickname}\r\nTITLE:${site.role}\r\n${site.email?'EMAIL;TYPE=INTERNET:'+site.email+'\r\n':''}${origin?'URL:'+origin+'\r\n':''}END:VCARD\r\n`);
 await emit('robots.txt',`User-agent: *\nAllow: /\n${origin?'Sitemap: '+origin+'/sitemap.xml\n':''}`);
 const routes=['/','/work/','/journal/','/contact/','/privacy/',...Object.keys(site.projects).map(x=>routeFor('work',x)),...Object.keys(site.articles).map(x=>routeFor('journal',x))];
 await emit('sitemap.xml',`<?xml version="1.0" encoding="UTF-8"?><urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">${origin?routes.map(route=>`<url><loc>${esc(origin+route)}</loc></url>`).join(''):''}</urlset>`);
 await emit('feed.xml',`<?xml version="1.0" encoding="UTF-8"?><rss version="2.0"><channel><title>${esc(site.name)} · ${esc(site.author)}的手记</title><link>${esc(origin || 'http://127.0.0.1:4317')}</link><description>${description}</description><language>zh-CN</language>${Object.entries(site.articles).map(([slug,data])=>`<item><title>${esc(data.title)}</title><link>${esc((origin || 'http://127.0.0.1:4317')+routeFor('journal',slug))}</link><guid isPermaLink="true">${esc((origin || 'http://127.0.0.1:4317')+routeFor('journal',slug))}</guid><description>${esc(data.intro+(isExample(data)?'（示例手记）':''))}</description></item>`).join('')}</channel></rss>`);
-console.log(`Built ${routes.length} pages + 404, RSS, sitemap and contact card → dist/`);
+console.log(`Built ${routes.length} pages + 404, ${redirects.length} redirects, RSS, sitemap and contact card → dist/`);

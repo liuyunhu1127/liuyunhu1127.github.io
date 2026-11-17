@@ -5,18 +5,20 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { spawn } from 'node:child_process';
 import http from 'node:http';
+import { runInNewContext } from 'node:vm';
 
 const root=path.resolve(path.dirname(fileURLToPath(import.meta.url)),'..');
 const dist=path.join(root,'dist');
 const site=JSON.parse(await readFile(path.join(root,'content/site.json'),'utf8'));
 const origin=new URL(process.env.SITE_URL || site.url || 'http://127.0.0.1:4317').origin;
 const routes=['/','/work/','/journal/','/contact/','/privacy/',...Object.keys(site.projects).map(slug=>`/work/${slug}/`),...Object.keys(site.articles).map(slug=>`/journal/${slug}/`)];
+const redirects=[['work',site.projects],['journal',site.articles]].flatMap(([kind,items])=>Object.entries(items).flatMap(([slug,item])=>(item.aliases || []).map(alias=>({from:`/${kind}/${alias}/`,to:`/${kind}/${slug}/`}))));
 const xmlEscape=value=>String(value).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const xmlDecode=value=>value.replace(/&(amp|lt|gt|quot|#39);/g,(_match,name)=>({amp:'&',lt:'<',gt:'>',quot:'"','#39':"'"}[name]));
 async function walk(dir) { const files=[]; for(const item of await readdir(dir,{withFileTypes:true})) { const file=path.join(dir,item.name); if(item.isDirectory()) files.push(...await walk(file)); else files.push(file); } return files; }
 const htmlFiles=(await walk(dist)).filter(file=>file.endsWith('.html'));
 test('every internal link, asset and anchor resolves in the static output',async()=> {
-  const expectedFiles=['404.html',...routes.map(route=>route.slice(1)+'index.html')].sort();
+  const expectedFiles=['404.html',...routes.map(route=>route.slice(1)+'index.html'),...redirects.map(item=>item.from.slice(1)+'index.html')].sort();
   assert.deepEqual(htmlFiles.map(file=>path.relative(dist,file).split(path.sep).join('/')).sort(),expectedFiles,'output must contain exactly the current content pages');
   for(const file of htmlFiles) {
     const html=await readFile(file,'utf8');
@@ -29,6 +31,27 @@ test('every internal link, asset and anchor resolves in the static output',async
       if((await stat(target)).isDirectory()) target=path.join(target,'index.html');
       assert.ok((await stat(target)).isFile(),`${file}: missing ${href}`);
       if(url.hash) { const targetHtml=await readFile(target,'utf8'); assert.ok(targetHtml.includes(`id="${decodeURIComponent(url.hash.slice(1))}"`),`${file}: missing anchor ${href}`); }
+    }
+  }
+});
+test('old slug pages jump straight to current content and preserve query and fragment',async()=> {
+  const sitemap=await readFile(path.join(dist,'sitemap.xml'),'utf8');
+  const feed=await readFile(path.join(dist,'feed.xml'),'utf8');
+  for (const redirect of redirects) {
+    const html=await readFile(path.join(dist,redirect.from.slice(1),'index.html'),'utf8');
+    assert.ok(html.includes(`<link rel="canonical" href="${origin+redirect.to}">`));
+    assert.ok(html.includes('<meta name="robots" content="noindex,follow">'));
+    assert.ok(html.includes(`<noscript><meta http-equiv="refresh" content="0;url=${redirect.to}"></noscript>`));
+    assert.ok(html.includes(`href="${redirect.to}">前往新页面`));
+    assert.ok(!sitemap.includes(`<loc>${origin+redirect.from}</loc>`));
+    assert.ok(!feed.includes(`<link>${origin+redirect.from}</link>`));
+    const script=html.match(/<script id="redirect-script">([\s\S]*?)<\/script>/)?.[1];
+    assert.ok(script,'redirect script must be present');
+    for (const [search,hash] of [['',''],['?from=share&next=https%3A%2F%2Fexample.com%2F','#section-1']]) {
+      const destinations=[];
+      runInNewContext(script,{location:{search,hash,replace:value=>destinations.push(value)}},{timeout:1000});
+      assert.deepEqual(destinations,[redirect.to+search+hash]);
+      assert.equal(new URL(destinations[0],origin).origin,origin);
     }
   }
 });
@@ -79,7 +102,7 @@ test('HTTP server handles deep routes, redirects, HEAD, 404, methods and travers
   const child=spawn(process.execPath,['server.mjs'],{cwd:root,env:{...process.env,PORT:'0'},stdio:['ignore','pipe','pipe']});
   try {
     const base=await new Promise((resolve,reject)=> { let output=''; const timer=setTimeout(()=>reject(new Error('Server startup timed out')),5000); child.stdout.on('data',chunk=> { output+=chunk; const address=output.match(/Local: (http:\/\/127\.0\.0\.1:\d+)/); if(address) {clearTimeout(timer);resolve(address[1]);} }); child.once('error',error=>{clearTimeout(timer);reject(error);}); child.once('exit',code=> {clearTimeout(timer);reject(new Error('Server exited before ready: '+code));}); });
-    for(const route of [...routes,'/feed.xml','/contact.vcf']) { const response=await fetch(base+route);assert.equal(response.status,200,route);assert.ok((await response.text()).length>20); }
+    for(const route of [...routes,...redirects.map(item=>item.from),'/feed.xml','/contact.vcf']) { const response=await fetch(base+route);assert.equal(response.status,200,route);assert.ok((await response.text()).length>20); }
     const redirect=await fetch(base+'/journal',{redirect:'manual'});assert.equal(redirect.status,308);assert.equal(redirect.headers.get('location'),'/journal/');
     const head=await fetch(base+(routes.find(route=>/^\/(work|journal)\/[^/]+\/$/.test(route)) || '/contact/'),{method:'HEAD'});assert.equal(head.status,200);assert.equal(await head.text(),'');
     const missing=await fetch(base+'/missing/');assert.equal(missing.status,404);assert.match(await missing.text(),/偶尔迷路/);

@@ -18,15 +18,19 @@ test('content can be added, renamed, deleted, made real, or emptied without edit
     await mkdir(path.join(fixture,'content'));
     const original=JSON.parse(await readFile(path.join(root,'content/site.json'),'utf8'));
     let data=structuredClone(original);
+    const childEnv={...process.env};
+    delete childEnv.NODE_TEST_CONTEXT;
     const run=(args)=>{
-      const result=spawnSync(process.execPath,args,{cwd:fixture,encoding:'utf8',timeout:20000,env:{...process.env}});
+      const result=spawnSync(process.execPath,args,{cwd:fixture,encoding:'utf8',timeout:20000,env:childEnv});
       assert.equal(result.status,0,`${args.join(' ')}\n${result.stdout}\n${result.stderr}`);
     };
     const verify=async()=>{await writeFile(path.join(fixture,'content/site.json'),JSON.stringify(data));run(['build.mjs']);run(['--test','tests/site.test.mjs']);};
     await t.test('current content',verify);
-    await t.test('rename every original slug and add real and sample entries',async()=>{
-      data.projects=Object.fromEntries(Object.entries(data.projects).map(([,item],index)=>[`renamed-project-${index}`,item]));
-      data.articles=Object.fromEntries(Object.entries(data.articles).map(([,item],index)=>[`renamed-article-${index}`,item]));
+    await t.test('replace slugs and add real and sample entries',async()=>{
+      // Keep synthetic cases independent of real content and its alias history.
+      const entry=index=>({title:`测试内容 ${index}`,intro:'用于维护场景的测试内容。',isExample:index%2===0,sections:[]});
+      data.projects=Object.fromEntries([0,1,2].map(index=>[`renamed-project-${index}`,{...entry(index),category:'design'}]));
+      data.articles=Object.fromEntries([0,1,2].map(index=>[`renamed-article-${index}`,entry(index)]));
       data.projects.constructor={title:'新的实际项目 $& <成果>',intro:'新增项目介绍。',category:'code',isExample:false,sections:[['实现过程','项目正文。']]};
       data.articles['release-notes']={title:'版本记录 $& <更新>',intro:'新增文章摘要。',topic:'技术实践',isExample:false,sections:[['过程','文章正文。']]};
       data.projects['sample-project']={title:'示例项目',intro:'概念探索。',category:'design',isExample:true,sections:[]};

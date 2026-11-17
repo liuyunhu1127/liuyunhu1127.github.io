@@ -59,8 +59,30 @@ npm start
 
 - **新增**：在 `projects` 或 `articles` 中复制一条内容，更换唯一的英文 slug 和正文；无需修改测试、构建脚本或页面数量。slug 只使用小写字母、数字和连字符，例如 `my-first-project`。
 - **删除**：从字典中移除对应条目。构建会重新生成 `dist/`，自动清理旧页面；列表、详情导航、RSS 和站点地图随内容更新。
-- **重命名**：只改 `title` 会保留网址；修改字典的 slug 会生成新网址，旧网址将返回 404，不会自动重定向。如果要保留已分享的网址，保持 slug 不变。
+- **重命名**：只改 `title` 会保留网址。修改字典的 slug 时，把旧值放进同一条内容的 `aliases` 数组，构建会自动生成旧地址跳转页；无需修改测试或维护单独的跳转文件。
 - **暂时清空**：可以设置 `projects: {}` 或 `articles: {}`。页面会显示整理中的提示；只有一条内容时，详情页提供返回列表入口，不再链接到自身。
+
+### 保留已分享的旧链接
+
+例如，将作品的 slug 从 `mono` 改成 `mono-studio`，同时在原条目中加入：
+
+```json
+"mono-studio": {
+  "aliases": ["mono"],
+  "title": "MONO · 少即是多",
+  "intro": "作品介绍。",
+  "visualPreset": "mono",
+  "sections": []
+}
+```
+
+发布后，`/work/mono/` 会自动前往 `/work/mono-studio/`。文章使用相同写法，地址位于 `/journal/` 下。这里只需填写旧 slug，不要填写完整网址或带斜杠的路径。
+
+多次改名时保留全部历史值。例如再次改成 `mono-v3`，设置 `"aliases": ["mono", "mono-studio"]`，两个旧地址都会直接跳到 `/work/mono-v3/`，不会先经过中间地址。仅修改 slug 而不记录旧值，系统无法判断它是改名还是删除；该旧地址仍会返回 404。
+
+旧 slug 不能等于任何当前内容的 slug，也不能在同一集合中被重复占用。冲突、重复、非法格式会使构建失败，并保留已发布的线上版本。作品与文章分属不同路径，可各自使用相同的旧 slug。
+
+GitHub Pages 使用静态托管，跳转由页面中的 `location.replace` 完成，保留查询参数和 `#` 锚点，并避免返回按钮反复回到旧页；这不是服务器端 HTTP 301。禁用 JavaScript 时提供 meta refresh 和可点击的新地址链接。旧页标注 `noindex`，canonical 指向新地址；站点地图、RSS 和列表只使用新地址。删除 `aliases` 中的旧值或删除整条内容后，对应旧地址会被清理。
 
 ### 概念作品和示例手记标识
 
@@ -101,6 +123,7 @@ npm start
 - `server.mjs`：本机预览服务。
 - `tests/site.test.mjs`：构建产物与 HTTP 验证。
 - `tests/content-lifecycle.test.mjs`：新增、删除、重命名、标识与空集合回归；不会修改你的实际内容文件。
+- `tests/redirects.test.mjs`：历史地址、多次改名、参数与锚点保留、冲突和非法配置回归。
 - `.github/workflows/pages.yml`：自动构建和部署。
 
 原 Sites 网站保留为旧地址，不会随 GitHub 代码更新而自动同步。
