@@ -31,7 +31,8 @@
       "category": "design",
       "summary": "一个独立设计工作室的数字表达",
       "tags": "品牌设计 / 网页设计",
-      "isExample": true
+      "isExample": true,
+      "visualPreset": "mono"
     },
     "field": {
       "label": "02 / PRODUCT CONCEPT",
@@ -51,7 +52,8 @@
       "category": "code",
       "summary": "为散落的灵感，建造一个有序的家",
       "tags": "产品设计 / 前端开发",
-      "isExample": true
+      "isExample": true,
+      "visualPreset": "field"
     },
     "slow": {
       "label": "03 / VISUAL EXPLORATION",
@@ -71,7 +73,8 @@
       "category": "life",
       "summary": "关于光、自然，以及那些值得停下来的瞬间",
       "tags": "视觉实验 / 生活记录",
-      "isExample": true
+      "isExample": true,
+      "visualPreset": "slow"
     }
   },
   "articles": {

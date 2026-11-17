@@ -25,4 +25,4 @@ const server=http.createServer(async(request,response)=>{
     response.writeHead(status,{...headers,'Content-Type':'text/html; charset=utf-8'});response.end(request.method==='HEAD'?undefined:data);
   }
 });
-server.listen(port,'127.0.0.1',()=>console.log(`Local: http://127.0.0.1:${port}`));
+server.listen(port,'127.0.0.1',()=>console.log(`Local: http://127.0.0.1:${server.address().port}`));

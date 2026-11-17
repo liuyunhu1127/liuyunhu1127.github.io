@@ -51,9 +51,24 @@ npm start
 | `projects` | 作品字典，键为英文 URL slug |
 | `articles` | 手记字典，键为英文 URL slug |
 
-作品字段：`title`、`label`、`intro`、`summary`、`tags`、`category`、`sections`、`note`。分类可选 `design`、`code`、`life`，`visualPreset` 可选 `mono`、`field`、`slow`。首页显示前三个作品。
+作品字段：`title`、`intro`、`sections` 为主要内容；可选 `label`、`summary`、`tags`、`category`、`note`、`isExample`。分类可选 `design`、`code`、`life`，`visualPreset` 可选 `mono`、`field`、`slow`。首页显示内容文件顺序中的前三个作品。`visualPreset` 是独立的封面选择，不需要与作品的 URL slug 一致；现有作品已显式配置，改名后可保持原封面。
 
-手记字段：`title`、`label`、`intro`、`topic`、`sections`、`note`、`isExample`。`sections` 为 `[["小标题","正文"],["小标题","正文"]]`；两个换行可分段。确认是你的原创内容后，将 `isExample` 设为 `false`，并更新 `label` 和 `note`。
+手记字段：`title`、`intro`、`sections` 为主要内容；可选 `label`、`topic`、`note`、`isExample`。`sections` 为 `[["小标题","正文"],["小标题","正文"]]`；两个换行可分段。`sections: []` 也可以，页面仍显示标题和摘要。
+
+### 新增、删除、重命名
+
+- **新增**：在 `projects` 或 `articles` 中复制一条内容，更换唯一的英文 slug 和正文；无需修改测试、构建脚本或页面数量。slug 只使用小写字母、数字和连字符，例如 `my-first-project`。
+- **删除**：从字典中移除对应条目。构建会重新生成 `dist/`，自动清理旧页面；列表、详情导航、RSS 和站点地图随内容更新。
+- **重命名**：只改 `title` 会保留网址；修改字典的 slug 会生成新网址，旧网址将返回 404，不会自动重定向。如果要保留已分享的网址，保持 slug 不变。
+- **暂时清空**：可以设置 `projects: {}` 或 `articles: {}`。页面会显示整理中的提示；只有一条内容时，详情页提供返回列表入口，不再链接到自身。
+
+### 概念作品和示例手记标识
+
+仅当 `isExample` 为布尔值 `true` 时，作品的卡片和详情显示“概念作品”，文章显示“示例手记”，RSS 也会加示例提示。设为 `false` 或省略该字段时，作品显示“项目作品”，文章显示“原创手记”。不要填写字符串 `"false"` 或 `"true"`，构建会拒绝非布尔值。
+
+首页与作品列表的整体说明同样自动变化：全部为概念作品时显示整体声明，混合内容时只说明带概念标识的条目，全部为实际项目时不显示概念声明。
+
+`label`、`note`、标题和正文是你自行填写的文字，系统不会根据标识删改它们。把现有示例替换成实际内容时，除了修改 `isExample`，也请改掉自行填写的“示例”“概念”等文案。省略 `label` 时会生成通用标题，省略 `note` 则不显示备注。
 
 当前作品和三篇手记为标注清楚的概念/示例内容，不代表真实项目经历或本人原创文章。姓名、昵称、职业和邮箱由本人提供。
 
@@ -69,7 +84,7 @@ npm start
 
 1. 推送到 `main` 或手动触发。
 2. 使用 Node.js 24 构建网站，正式地址来自 GitHub Pages 配置。
-3. 验证页面内部链接、锚点、资源、元数据、RSS、名片及 HTTP 路由。
+3. 根据当前内容验证页面内部链接、锚点、资源、元数据、RSS、名片及 HTTP 路由，并在隔离目录验证增删、改名、混合标识与空列表等完整构建场景。
 4. 上传 `dist/`，使用 GitHub 官方 Pages Action 发布。
 
 部署使用仓库自动提供的 `GITHUB_TOKEN` 和 OIDC，不需要手动保存个人访问令牌。仓库仅给部署任务配置 `pages: write` 和 `id-token: write` 权限。
@@ -85,6 +100,7 @@ npm start
 - `site.js`：浏览器交互。
 - `server.mjs`：本机预览服务。
 - `tests/site.test.mjs`：构建产物与 HTTP 验证。
+- `tests/content-lifecycle.test.mjs`：新增、删除、重命名、标识与空集合回归；不会修改你的实际内容文件。
 - `.github/workflows/pages.yml`：自动构建和部署。
 
 原 Sites 网站保留为旧地址，不会随 GitHub 代码更新而自动同步。
